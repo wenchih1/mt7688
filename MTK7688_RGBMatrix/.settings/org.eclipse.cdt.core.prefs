@@ -1,0 +1,11 @@
+eclipse.preferences.version=1
+environment/project/cdt.managedbuild.config.gnu.cross.exe.debug.428540877/STAGING_DIR/delimiter=\:
+environment/project/cdt.managedbuild.config.gnu.cross.exe.debug.428540877/STAGING_DIR/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.debug.428540877/STAGING_DIR/value=/Users/primax/sdk7688/OpenWrtSDK/staging_dir/
+environment/project/cdt.managedbuild.config.gnu.cross.exe.debug.428540877/append=true
+environment/project/cdt.managedbuild.config.gnu.cross.exe.debug.428540877/appendContributed=true
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.1636726361/STAGING_DIR/delimiter=\:
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.1636726361/STAGING_DIR/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.1636726361/STAGING_DIR/value=/Users/primax/sdk7688/OpenWrtSDK/staging_dir/
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.1636726361/append=true
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.1636726361/appendContributed=true
