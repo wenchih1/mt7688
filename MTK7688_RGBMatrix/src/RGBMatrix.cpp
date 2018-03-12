@@ -108,10 +108,10 @@ void setup(void)
 	signal(SIGKILL, sig_handler);
 
 	// Linkit smart 7688
-	pins.CHA = 12; //P19
-	pins.CHB = 13; //P18
-	pins.CHC = 45; //P17
-	pins.CHD = 46; //P16
+	pins.CHA = 4; //P21
+	pins.CHB = 5; //P20
+	pins.CHC = 12; //P19
+	pins.CHD = 13; //P18
 	pins.CHE = 2; //P10
 	pins.R1 = 14; //P31
 	pins.G1 = 15; //P30
