@@ -108,10 +108,10 @@ void setup(void)
 	signal(SIGKILL, sig_handler);
 
 	// Linkit smart 7688
-	pins.CHA = 12; //P19
-	pins.CHB = 13; //P18
-	pins.CHC = 45; //P17
-	pins.CHD = 46; //P16
+	pins.CHA = 4; //P21
+	pins.CHB = 5; //P20
+	pins.CHC = 12; //P19
+	pins.CHD = 13; //P18
 	pins.CHE = 2; //P10
 	pins.R1 = 14; //P31
 	pins.G1 = 15; //P30
@@ -151,10 +151,13 @@ int main() {
 	cout << "64x64 RGB Matrix demo" << endl; // prints 64x64 RGB Matrix demo
 	while(flag)
 	{
-//		matrix->swapBuffers(true);
-		matrix->updateDisplay();
-		usleep(0);
+		usleep(1000000);
+		matrix->swapBuffers(true);
+
 	}
+
+	matrix->m_Exit = true;
+	matrix->Wait();
 
 	if(matrix)
 		delete matrix;

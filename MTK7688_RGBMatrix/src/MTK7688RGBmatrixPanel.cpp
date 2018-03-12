@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/time.h>
+
 
 //G1		R1 |
 //GND	B1 |
@@ -33,47 +35,135 @@ static MTK7688RGBmatrixPanel *activePanel = NULL;
 
 using namespace std;
 
-//void IRAM_ATTR onDisplayUpdate2()
-//{
-//   if(activePanel==NULL)
-//      return;
+
+//#include <vector>
 //
-//   activePanel->updateDisplay();
+//static volatile uint8_t *timer1Mhz = NULL;
+//
+//static void sleep_nanos_rpi_1(long nanos);
+////static void sleep_nanos_rpi_2(long nanos);
+//static void (*busy_sleep_impl)(long) = sleep_nanos_rpi_1;
+//class Timers {
+//public:
+//  static bool Init();
+//  static void sleep_nanos(long t);
+//};
+//void Timers::sleep_nanos(long nanos) {
+//  // For smaller durations, we go straight to busy wait.
+//
+//  // For larger duration, we use nanosleep() to give the operating system
+//  // a chance to do something else.
+//  // However, these timings have a lot of jitter, so we do a two way
+//  // approach: we use nanosleep(), but for some shorter time period so
+//  // that we can tolerate some jitter (also, we need at least an offset of
+//  // EMPIRICAL_NANOSLEEP_OVERHEAD_US as the nanosleep implementations on RPi
+//  // actually have such offset).
+//  //
+//  // We use the global 1Mhz hardware timer to measure the actual time period
+//  // that has passed, and then inch forward for the remaining time with
+//  // busy wait.
+//  static long kJitterAllowanceNanos = 25 * 1000;
+//  if (nanos > kJitterAllowanceNanos + 5000) {
+//    const uint32_t before = *timer1Mhz;
+//    struct timespec sleep_time
+//      = { 0, nanos - kJitterAllowanceNanos };
+//    nanosleep(&sleep_time, NULL);
+//    const uint32_t after = *timer1Mhz;
+//    const long nanoseconds_passed = 1000 * (uint32_t)(after - before);
+//    if (nanoseconds_passed > nanos) {
+//      return;  // darn, missed it.
+//    } else {
+//      nanos -= nanoseconds_passed; // remaining time with busy-loop
+//    }
+//  }
+//
+//  busy_sleep_impl(nanos);
 //}
+//
+//static void sleep_nanos_rpi_1(long nanos) {
+//  if (nanos < 70) return;
+//  // The following loop is determined empirically on a 700Mhz RPi
+//  for (uint32_t i = (nanos - 70) >> 2; i != 0; --i) {
+//    asm("nop");
+//  }
+//}
+//
+//bool Timers::Init() {
+////  const bool isRPi2 = IsRaspberryPi2();
+////  uint32_t *timereg = mmap_bcm_register(COUNTER_1Mhz_REGISTER_OFFSET);
+//
+//  uint8_t *timereg = 0;//mmap_bcm_register(0);
+////  timereg += COUNTER_1Mhz_REGISTER_OFFSET;
+//  if (timereg == NULL) {
+//    return false;
+//  }
+//  timer1Mhz = timereg + 1;
+//
+////  busy_sleep_impl = isRPi2 ? sleep_nanos_rpi_2 : sleep_nanos_rpi_1;
+////  if (isRPi2) DisableRealtimeThrottling();
+//  busy_sleep_impl = sleep_nanos_rpi_1;
+//  return true;
+//}
+//
+//class TimerBasedPinPulser {
+//public:
+//  TimerBasedPinPulser(MTK7688GPIO &Gpio) : m_Gpio(Gpio)
+//  {
+//	for (int b = 0; b < 11; ++b)
+//		nano_specs_.push_back((130 << b));
+//
+//  }
+//
+//  void WaitPulseFinished() {}
+//  virtual void SendPulse(int time_spec_number) {
+//    m_Gpio.SetPin(3, LOW);
+//	Timers::sleep_nanos(nano_specs_[time_spec_number]);
+//    m_Gpio.SetPin(3, HIGH);
+//  }
+//
+//private:
+//  MTK7688GPIO& m_Gpio;
+//  std::vector<int> nano_specs_;
+//};
 
-
-void MTK7688RGBmatrixPanel::SetGPIODir(mraa::Gpio* gpio,  mraa::Dir dir)
+void* MTK7688RGBmatrixPanel::DisplayCallBack( void *ptr )
 {
-	mraa::Result state;
-	state = gpio->dir(dir);
-	if (state != mraa::SUCCESS)
-		printError(state);
+
+	MTK7688RGBmatrixPanel *matrix = (MTK7688RGBmatrixPanel*)ptr;
+	while(!matrix->m_Exit)
+	{
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+		matrix->updateDisplay();
+		gettimeofday(&end, NULL);
+		int64_t usec = ((uint64_t)end.tv_sec * 1000000 + end.tv_usec)
+		  - ((int64_t)start.tv_sec * 1000000 + start.tv_usec);
+		printf("\b\b\b\b\b\b\b\b%6.1fHz,", 1e6 / usec);
+
+		printf("diff %ld\n",end.tv_usec-start.tv_usec);
+	}
+
+	return 0;
 }
 
-void MTK7688RGBmatrixPanel::SetGPIO(mraa::Gpio* gpio,  bool b)
+void MTK7688RGBmatrixPanel::Wait(void)
 {
-	mraa::Result state;
-	state = gpio->write(b ? HIGH : LOW);
-	if (state != mraa::SUCCESS)
-		printError(state);
+	pthread_join( m_thread1, NULL);
 }
 
-void MTK7688RGBmatrixPanel::SetColorPin(mraa::Gpio* gpio,  uint16_t val)
+void MTK7688RGBmatrixPanel::SetColorPin(int gpio,  uint16_t val)
 {
 #if defined(GAMMA_CORRECTION)
-	SetGPIO(gpio, gamma8[val] > layer ? HIGH : LOW);
+	m_Gpio.SetPin(gpio, gamma8[val] > layer ? HIGH : LOW);
 #else
-	SetGPIO(gpio, val > layer ? HIGH : LOW);
+	m_Gpio.SetPin(gpio, val > layer ? HIGH : LOW);
 #endif
 }
 
 MTK7688RGBmatrixPanel::MTK7688RGBmatrixPanel(const struct RGBPin Pins, uint16_t width, uint16_t height)
   : Adafruit_GFX(width, height)
   , loopNr(0), loopNrOn(0), row(0), plane(0), WIDTH(width), HEIGHT(height)
-  , gpio_cha(0), gpio_chb(0), gpio_chc(0), gpio_chd(0), gpio_che(0)
-  , gpio_r1(0), gpio_g1(0), gpio_b1(0), gpio_r2(0), gpio_g2(0), gpio_b2(0)
-  , gpio_oe(0), gpio_clk(0), gpio_lat(0)
-  , EPortAvailable(false), swapflag(false), backindex(0)
+  , EPortAvailable(false), swapflag(false), backindex(0), m_Exit(false)
 {
 	memcpy(&m_Pins, &Pins, sizeof(RGBPin));
 	layerStep = 256 / (1 << colorDepthPerChannel);
@@ -83,34 +173,7 @@ MTK7688RGBmatrixPanel::MTK7688RGBmatrixPanel(const struct RGBPin Pins, uint16_t 
 
 MTK7688RGBmatrixPanel::~MTK7688RGBmatrixPanel()
 {
-	if(gpio_cha)
-		delete gpio_cha;
-	if(gpio_chb)
-		delete gpio_chb;
-	if(gpio_chc)
-		delete gpio_chc;
-	if(gpio_chd)
-		delete gpio_chd;
-	if(gpio_che)
-		delete gpio_che;
-	if(gpio_r1)
-		delete gpio_r1;
-	if(gpio_g1)
-		delete gpio_g1;
-	if(gpio_b1)
-		delete gpio_b1;
-	if(gpio_r2)
-		delete gpio_r2;
-	if(gpio_g2)
-		delete gpio_g2;
-	if(gpio_b2)
-		delete gpio_b2;
-	if(gpio_oe)
-		delete gpio_oe;
-	if(gpio_clk)
-		delete gpio_clk;
-	if(gpio_lat)
-		delete gpio_lat;
+
 }
 
 void MTK7688RGBmatrixPanel::init(void)
@@ -122,94 +185,88 @@ void MTK7688RGBmatrixPanel::init(void)
     row = 0;//ROWS - 1;
 
     // Allocate and initialize matrix buffer:
-    int buffsize  = WIDTH * HEIGHT * sizeof(color) * 2;
+    int buffsize  = WIDTH * HEIGHT * sizeof(color);
     pixelBuf[0] = (color *)malloc(buffsize);
+    pixelBuf[1] = (color *)malloc(buffsize);
     memset(pixelBuf[0], 0, buffsize);
-//    pixelBuf[1] = pixelBuf[0];
-//    pixelBuf[1] = pix;
+    memset(pixelBuf[1], 0, buffsize);
     // If not double-buffered, both buffers then point to the same address:
-    pixelBuf[1] = &pixelBuf[0][buffsize];
 
     // Array index of back buffer
     backindex = 0;                      // Back buffer
     buffptr = pixelBuf[1 - backindex];  // Front buffer
     activePanel = this;                 // For interrupt hander
+
+	/* Create independent threads each of which will execute function */
+
+	int iret1 = pthread_create( &m_thread1, NULL, DisplayCallBack, (void*) this);
+	if(iret1)
+	{
+		fprintf(stderr,"Error - pthread_create() return code: %d\n",iret1);
+	}
 }
 
 void MTK7688RGBmatrixPanel::initGPIO()
 {
     // Enable all comm & address pins as outputs, set default states:
 
+	if( m_Gpio.InitMmap() < 0 )
+	{
+		cout << "Initial Memory Map failed!!!" << endl;
+		return;
+	}
 	//
 	// create r1,b1,g1,r2,b2 and g2 data lines
 	//
-	gpio_r1 = new mraa::Gpio(m_Pins.R1);
-	SetGPIODir(gpio_r1,  mraa::DIR_OUT);
-	SetGPIO(gpio_r1,  LOW);
-
-	gpio_g1 = new mraa::Gpio(m_Pins.G1);
-	SetGPIODir(gpio_g1,  mraa::DIR_OUT);
-	SetGPIO(gpio_g1,  LOW);
-
-	gpio_b1 = new mraa::Gpio(m_Pins.B1);
-	SetGPIODir(gpio_b1,  mraa::DIR_OUT);
-	SetGPIO(gpio_b1,  LOW);
-
-	gpio_r2 = new mraa::Gpio(m_Pins.R2);
-	SetGPIODir(gpio_r2,  mraa::DIR_OUT);
-	SetGPIO(gpio_r2,  LOW);
-
-	gpio_g2 = new mraa::Gpio(m_Pins.G2);
-	SetGPIODir(gpio_g2,  mraa::DIR_OUT);
-	SetGPIO(gpio_g2,  LOW);
-
-	gpio_b2 = new mraa::Gpio(m_Pins.B2);
-	SetGPIODir(gpio_b2,  mraa::DIR_OUT);
-	SetGPIO(gpio_b2,  LOW);
+	m_Gpio.SetPinDir(m_Pins.R1, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.R1, LOW);
+	m_Gpio.SetPinDir(m_Pins.G1, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.G1, LOW);
+	m_Gpio.SetPinDir(m_Pins.B1, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.B1, LOW);
+	m_Gpio.SetPinDir(m_Pins.R2, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.R2, LOW);
+	m_Gpio.SetPinDir(m_Pins.G2, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.G2, LOW);
+	m_Gpio.SetPinDir(m_Pins.B2, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.B2, LOW);
 
 	//
 	// decide A,B,C,D and E ports
 	//
-	gpio_cha = new mraa::Gpio(m_Pins.CHA);			// 1
-	SetGPIODir(gpio_cha,  mraa::DIR_OUT);
-	SetGPIO(gpio_cha,  LOW);
-
-	gpio_chb = new mraa::Gpio(m_Pins.CHB);			// 2
-	SetGPIODir(gpio_chb,  mraa::DIR_OUT);
-	SetGPIO(gpio_chb,  LOW);
-
-	gpio_chc = new mraa::Gpio(m_Pins.CHC);			// 4
-	SetGPIODir(gpio_chc,  mraa::DIR_OUT);
-	SetGPIO(gpio_chc,  LOW);
+	// 1
+	m_Gpio.SetPinDir(m_Pins.CHA, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.CHA, LOW);
+	// 2
+	m_Gpio.SetPinDir(m_Pins.CHB, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.CHB, LOW);
+	// 4
+	m_Gpio.SetPinDir(m_Pins.CHC, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.CHC, LOW);
 
     if(HEIGHT > 16)
     {
-		gpio_chd = new mraa::Gpio(m_Pins.CHD);		// 8
-		SetGPIODir(gpio_chd,  mraa::DIR_OUT);
-		SetGPIO(gpio_chd,  LOW);
+    		// 8
+    		m_Gpio.SetPinDir(m_Pins.CHD, MTK7688GPIO::DIR_OUT);
+    		m_Gpio.SetPin(m_Pins.CHD, LOW);
     }
     if(HEIGHT > 32)
     {
-		gpio_che = new mraa::Gpio(m_Pins.CHE);		// 16
-		SetGPIODir(gpio_che,  mraa::DIR_OUT);
-		SetGPIO(gpio_che,  LOW);
+    		// 16
+    		m_Gpio.SetPinDir(m_Pins.CHE, MTK7688GPIO::DIR_OUT);
+    		m_Gpio.SetPin(m_Pins.CHE, LOW);
         EPortAvailable = true;
     }
 
 	//
 	// create lat,clk and oe control functions
 	//
-	gpio_lat = new mraa::Gpio(m_Pins.LAT);
-	SetGPIODir(gpio_lat,  mraa::DIR_OUT);
-	SetGPIO(gpio_lat,  LOW);
-
-	gpio_clk = new mraa::Gpio(m_Pins.CLK);
-	SetGPIODir(gpio_clk,  mraa::DIR_OUT);
-	SetGPIO(gpio_clk,  LOW);
-
-	gpio_oe = new mraa::Gpio(m_Pins.OE);
-	SetGPIODir(gpio_oe,  mraa::DIR_OUT);
-	SetGPIO(gpio_oe,  HIGH);
+    m_Gpio.SetPinDir(m_Pins.LAT, MTK7688GPIO::DIR_OUT);
+    	m_Gpio.SetPin(m_Pins.LAT, LOW);
+    	m_Gpio.SetPinDir(m_Pins.CLK, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.CLK, LOW);
+	m_Gpio.SetPinDir(m_Pins.OE, MTK7688GPIO::DIR_OUT);
+	m_Gpio.SetPin(m_Pins.OE, HIGH);
 }
 
 void MTK7688RGBmatrixPanel::begin(void)
@@ -248,7 +305,7 @@ void MTK7688RGBmatrixPanel::drawPixel(int16_t x, int16_t y, uint16_t c)
 	if (y < 0 || y >= WIDTH)
 	    return;
 
-	color* pixel = &pixelBuf[0][x * WIDTH  + y]; //backindex
+	color* pixel = &pixelBuf[backindex][x * WIDTH  + y]; //backindex
 
 	pixel->r = ((c & rmask)) << 4;
 	pixel->g = ((c & gmask));
@@ -306,7 +363,7 @@ void MTK7688RGBmatrixPanel::updateDisplay()
 {
 //    update();
 //    on();
-//    usleep(0);
+//    NOP5();
 //    return;
     
     if (loopNr == 0) 
@@ -316,21 +373,7 @@ void MTK7688RGBmatrixPanel::updateDisplay()
     if (++loopNr >= loops - 9)//9
     {
     		usleep(1);
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-//      NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();NOP5();
-      loopNr = 0;
+    		loopNr = 0;
     }
 }
 
@@ -339,15 +382,16 @@ void MTK7688RGBmatrixPanel::update()
 {
     buffptr = pixelBuf[0]; // default 0
     
-    SetGPIO(gpio_oe, HIGH);
+//    TimerBasedPinPulser OEPin(m_Gpio);
+//    m_Gpio.SetPin(m_Pins.OE, HIGH);
 
-    SetGPIO(gpio_cha, row & 1 << 0);
-    SetGPIO(gpio_chb, row & 1 << 1);
-    SetGPIO(gpio_chc, row & 1 << 2);
+    m_Gpio.SetPin(m_Pins.CHA, row & 1 << 0);
+    m_Gpio.SetPin(m_Pins.CHB, row & 1 << 1);
+    m_Gpio.SetPin(m_Pins.CHC, row & 1 << 2);
     if(HEIGHT > 16)
-        SetGPIO(gpio_chd, row & 1 << 3);
+    		m_Gpio.SetPin(m_Pins.CHD, row & 1 << 3);
     if(HEIGHT > 32)
-        SetGPIO(gpio_che, row & 1 << 4);
+    		m_Gpio.SetPin(m_Pins.CHE, row & 1 << 4);
 
     // RESET timer duration
 //    timerWrite(displayUpdateTimer2, duration/100);
@@ -360,21 +404,22 @@ void MTK7688RGBmatrixPanel::update()
         lo_index = ((row + HEIGHT/2) * WIDTH) + column;
 
 //        cout  << hex << (short)buffptr[hi_index].r << ", " << hex <<  (short)buffptr[hi_index].g << ", " << hex << (short)buffptr[hi_index].b << endl;
-        SetColorPin(gpio_r1, buffptr[hi_index].r);
-        SetColorPin(gpio_g1, buffptr[hi_index].g);
-        SetColorPin(gpio_b1, buffptr[hi_index].b);
-        SetColorPin(gpio_r2, buffptr[lo_index].r);
-        SetColorPin(gpio_g2, buffptr[lo_index].g);
-        SetColorPin(gpio_b2, buffptr[lo_index].b);
+        SetColorPin(m_Pins.R1, buffptr[hi_index].r);
+        SetColorPin(m_Pins.G1, buffptr[hi_index].g);
+        SetColorPin(m_Pins.B1, buffptr[hi_index].b);
+        SetColorPin(m_Pins.R2, buffptr[lo_index].r);
+        SetColorPin(m_Pins.G2, buffptr[lo_index].g);
+        SetColorPin(m_Pins.B2, buffptr[lo_index].b);
 
-        SetGPIO(gpio_clk, HIGH);
-        SetGPIO(gpio_clk, LOW);
+        m_Gpio.SetPin(m_Pins.CLK, HIGH);
+        m_Gpio.SetPin(m_Pins.CLK, LOW);
     }
 
-	SetGPIO(gpio_lat, HIGH);
-	SetGPIO(gpio_lat, LOW);
-//    SetGPIO(LAT, LOW);
-//     SetGPIO(OE, LOW);
+//    OEPin.WaitPulseFinished();
+    m_Gpio.SetPin(m_Pins.LAT, HIGH);
+	m_Gpio.SetPin(m_Pins.LAT, LOW);
+	m_Gpio.SetPin(m_Pins.OE, HIGH);
+//	OEPin.SendPulse(layer);
 
     row ++;
     if (row % 32==0)
@@ -396,7 +441,7 @@ void MTK7688RGBmatrixPanel::update()
 
 void MTK7688RGBmatrixPanel::on()
 {
-    SetGPIO(gpio_oe, LOW);
+	m_Gpio.SetPin(m_Pins.OE, LOW);
 }
 
 

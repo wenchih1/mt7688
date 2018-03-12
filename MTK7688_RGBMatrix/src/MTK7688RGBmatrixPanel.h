@@ -1,7 +1,10 @@
 
 #include "Adafruit_GFX.h"
-#include "mraa/common.hpp"
-#include "mraa/gpio.hpp"
+//#include "mraa/common.hpp"
+//#include "mraa/gpio.hpp"
+#include "MTK7688GPIO.h"
+
+#include <pthread.h>
 
 typedef unsigned char byte;
 typedef unsigned char uint8;
@@ -91,7 +94,7 @@ class MTK7688RGBmatrixPanel : public Adafruit_GFX
 public:
 	/*variable pin setup*/
 	MTK7688RGBmatrixPanel(const struct RGBPin Pins, uint16_t width, uint16_t height);
-	~MTK7688RGBmatrixPanel();
+	virtual ~MTK7688RGBmatrixPanel();
 
 public:
 	void begin(void);
@@ -115,12 +118,15 @@ public:
 	bool EPortSupport() const { return EPortAvailable; }
 	void setBackBuffer(color* c) { pixelBuf[backindex] = c; }
 
+	static void* DisplayCallBack( void *ptr );
+	void Wait(void);
+
 private:
 	void init(void);
 	void initGPIO();
-	void SetColorPin(mraa::Gpio* gpio,  uint16_t val);
-	void SetGPIO(mraa::Gpio* gpio,  bool b);
-	void SetGPIODir(mraa::Gpio* gpio,  mraa::Dir dir);
+	void SetColorPin(int gpio,  uint16_t val);
+	void SetGPIO(int gpio,  bool b);
+	void SetGPIODir(int gpio,  int dir);
 	color* backBuffer();
 
 	color *pixelBuf[2];
@@ -131,24 +137,10 @@ private:
 	volatile byte loopNr;
 	volatile byte loopNrOn;
 
-    mraa::Gpio* gpio_oe;
-    mraa::Gpio* gpio_clk;
-    mraa::Gpio* gpio_lat;
-
-    mraa::Gpio* gpio_cha;
-    mraa::Gpio* gpio_chb;
-    mraa::Gpio* gpio_chc;
-    mraa::Gpio* gpio_chd;
-    mraa::Gpio* gpio_che;
-
-    mraa::Gpio* gpio_r1;
-    mraa::Gpio* gpio_g1;
-    mraa::Gpio* gpio_b1;
-    mraa::Gpio* gpio_r2;
-    mraa::Gpio* gpio_g2;
-    mraa::Gpio* gpio_b2;
-
+	MTK7688GPIO m_Gpio;
     struct RGBPin m_Pins;
+
+    pthread_t m_thread1;
 
 	uint16_t WIDTH;
 	uint16_t HEIGHT;
@@ -161,5 +153,8 @@ private:
 	uint8 plane;
 
 	bool EPortAvailable;
+
+public:
+	bool m_Exit;
 };
 
