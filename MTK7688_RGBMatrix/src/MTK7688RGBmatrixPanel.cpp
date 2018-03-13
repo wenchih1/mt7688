@@ -218,16 +218,22 @@ void MTK7688RGBmatrixPanel::initGPIO()
 	//
 	// create r1,b1,g1,r2,b2 and g2 data lines
 	//
+	m_Gpio.SetPinMode(m_Pins.R1, true);
 	m_Gpio.SetPinDir(m_Pins.R1, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.R1, LOW);
+	m_Gpio.SetPinMode(m_Pins.G1, true);
 	m_Gpio.SetPinDir(m_Pins.G1, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.G1, LOW);
+	m_Gpio.SetPinMode(m_Pins.B1, true);
 	m_Gpio.SetPinDir(m_Pins.B1, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.B1, LOW);
+	m_Gpio.SetPinMode(m_Pins.R2, true);
 	m_Gpio.SetPinDir(m_Pins.R2, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.R2, LOW);
+	m_Gpio.SetPinMode(m_Pins.G2, true);
 	m_Gpio.SetPinDir(m_Pins.G2, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.G2, LOW);
+	m_Gpio.SetPinMode(m_Pins.B2, true);
 	m_Gpio.SetPinDir(m_Pins.B2, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.B2, LOW);
 
@@ -235,24 +241,29 @@ void MTK7688RGBmatrixPanel::initGPIO()
 	// decide A,B,C,D and E ports
 	//
 	// 1
+	m_Gpio.SetPinMode(m_Pins.CHA, true);
 	m_Gpio.SetPinDir(m_Pins.CHA, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.CHA, LOW);
 	// 2
+	m_Gpio.SetPinMode(m_Pins.CHB, true);
 	m_Gpio.SetPinDir(m_Pins.CHB, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.CHB, LOW);
 	// 4
+	m_Gpio.SetPinMode(m_Pins.CHC, true);
 	m_Gpio.SetPinDir(m_Pins.CHC, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.CHC, LOW);
 
     if(HEIGHT > 16)
     {
     		// 8
+    		m_Gpio.SetPinMode(m_Pins.CHD, true);
     		m_Gpio.SetPinDir(m_Pins.CHD, MTK7688GPIO::DIR_OUT);
     		m_Gpio.SetPin(m_Pins.CHD, LOW);
     }
     if(HEIGHT > 32)
     {
     		// 16
+    		m_Gpio.SetPinMode(m_Pins.CHE, true);
     		m_Gpio.SetPinDir(m_Pins.CHE, MTK7688GPIO::DIR_OUT);
     		m_Gpio.SetPin(m_Pins.CHE, LOW);
         EPortAvailable = true;
@@ -261,10 +272,13 @@ void MTK7688RGBmatrixPanel::initGPIO()
 	//
 	// create lat,clk and oe control functions
 	//
+    m_Gpio.SetPinMode(m_Pins.LAT, true);
     m_Gpio.SetPinDir(m_Pins.LAT, MTK7688GPIO::DIR_OUT);
     	m_Gpio.SetPin(m_Pins.LAT, LOW);
+    	m_Gpio.SetPinMode(m_Pins.CLK, true);
     	m_Gpio.SetPinDir(m_Pins.CLK, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.CLK, LOW);
+	m_Gpio.SetPinMode(m_Pins.OE, true);
 	m_Gpio.SetPinDir(m_Pins.OE, MTK7688GPIO::DIR_OUT);
 	m_Gpio.SetPin(m_Pins.OE, HIGH);
 }

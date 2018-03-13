@@ -49,6 +49,94 @@
 #define RALINK_REG_PIO9564SET        0x638
 #define RALINK_REG_PIO9564RESET      0x648
 
+
+enum {
+	MUX_I2C = 0, MUX_UART0, MUX_UART1, MUX_UART2, MUX_PWM0, MUX_PWM1, MUX_REF_CLK, MUX_SPI_S,
+	MUX_SPI_CS1, MUX_I2S, MUX_EPHY, MUX_WLED, MUX_MAX,
+};
+
+static struct pinmux {
+	uint8_t index;
+	int8_t pins[4];
+	bool gpio_mode;
+	unsigned int shift;
+	unsigned int mask;
+} mt7688_mux[] = {
+	{
+		.index = MUX_I2C,
+		.pins = {4, 5, -1, -1},
+		.gpio_mode = false,
+		.shift = 20,
+		.mask = 0x3,
+	}, {
+		.index = MUX_UART0,
+		.pins = {12, 13, -1, -1},
+		.gpio_mode = false,
+		.shift = 8,
+		.mask = 0x3,
+	}, {
+		.index = MUX_UART1,
+		.pins = {45, 45, -1, -1},
+		.gpio_mode = false,
+		.shift = 24,
+		.mask = 0x3,
+	}, {
+		.index = MUX_UART2,
+		.pins = {20, 21, -1, -1},
+		.gpio_mode = false,
+		.shift = 26,
+		.mask = 0x3,
+	}, {
+		.index = MUX_PWM0,
+		.pins = {18, -1, -1, -1},
+		.gpio_mode = false,
+		.shift = 28,
+		.mask = 0x3,
+	}, {
+		.index = MUX_PWM1,
+		.pins = {18, 19, -1, -1},
+		.gpio_mode = false,
+		.shift = 30,
+		.mask = 0x3,
+	}, {
+		.index = MUX_REF_CLK,
+		.pins = {37, -1, -1, -1},
+		.gpio_mode = false,
+		.shift = 18,
+		.mask = 0x1,
+	}, {
+		.index = MUX_SPI_S,
+		.pins = {14, 15, 16, 17},
+		.gpio_mode = false,
+		.shift = 2,
+		.mask = 0x3,
+	}, {
+		.index = MUX_SPI_CS1,
+		.pins = {6, -1, -1, -1},
+		.gpio_mode = false,
+		.shift = 4,
+		.mask = 0x3,
+	}, {
+		.index = MUX_I2S,
+		.pins = {0, 1, 2, 3},
+		.gpio_mode = false,
+		.shift = 6,
+		.mask = 0x3,
+	}, {
+		.index = MUX_EPHY,
+		.pins = {43, -1, -1, -1},
+		.gpio_mode = false,
+		.shift = 34,
+		.mask = 0x3,
+	}, {
+		.index = MUX_WLED,
+		.pins = {44, -1, -1, -1},
+		.gpio_mode = false,
+		.shift = 32,
+		.mask = 0x3,
+	}
+};
+
 MTK7688GPIO::MTK7688GPIO()
 : gpio_mmap_reg(NULL), gpio_mmap_fd(-1)
 {
@@ -91,6 +179,41 @@ int MTK7688GPIO::InitMmap(void)
     }
 
     return 0;
+}
+
+
+void MTK7688GPIO::gpiomode_set(unsigned int mask, unsigned int shift, unsigned int val)
+{
+	// val: 0:fun1, 1:gpio, 2:fun3, 3:fun4, in gpio group
+	volatile uint32_t *reg = (volatile uint32_t*) (gpio_mmap_reg + 0x60);
+	unsigned int v;
+
+	if (shift > 31) {
+		shift -= 32;
+		reg++;
+	}
+
+	v = *reg;
+	v &= ~(mask << shift);
+	v |= (val << shift);
+	*(volatile uint32_t*) (reg) = v;
+}
+
+void MTK7688GPIO::SetPinMode(uint8_t pin, bool isgpio)
+{
+	uint8_t i = 0;
+	for(; i < MUX_MAX; ++ i)
+	{
+		for(uint8_t j = 0; j < 4; ++ j)
+		{
+			if(mt7688_mux[i].pins[j] == pin && ! mt7688_mux[i].gpio_mode)
+			{
+				gpiomode_set(mt7688_mux[i].mask, mt7688_mux[i].shift, isgpio);
+				mt7688_mux[i].gpio_mode = true;
+				return;
+			}
+		}
+	}
 }
 
 void MTK7688GPIO::SetPinDir(int pin, int is_output)

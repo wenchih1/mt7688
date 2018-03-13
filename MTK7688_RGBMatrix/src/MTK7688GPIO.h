@@ -20,9 +20,13 @@ public:
 
 public:
 	int InitMmap(void);
+	void SetPinMode(uint8_t pin, bool isgpio);
 	void SetPinDir(int pin, int is_output);
 	void SetPin(int pin, int value);
 	int GetPin(int pin);
+
+private:
+	void gpiomode_set(unsigned int mask, unsigned int shift, unsigned int val);
 
 private:
 	uint8_t* gpio_mmap_reg;
